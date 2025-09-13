@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Financial Tool</title>
+  <style>
+    /* Reset & basic */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0; padding: 0;
+      background: #f5f7fa;
+      color: #333;
+    }
+    header {
+      background: #4a90e2;
+      color: white;
+      padding: 1rem 2rem;
+      text-align: center;
+    }
+    main {
+      max-width: 900px;
+      margin: 2rem auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 2rem;
+    }
+    h2 {
+      border-bottom: 2px solid #4a90e2;
+      padding-bottom: 0.3rem;
+      margin-bottom: 1rem;
+    }
+    form {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    input[type=text], input[type=number], input[type=date] {
+      flex: 1 1 150px;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    button {
+      background: #4a90e2;
+      border: none;
+      color: white;
+      padding: 0.6rem 1.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #357ABD;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+    th, td {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    .category {
+      font-weight: 600;
+      color: #4a90e2;
+    }
+    .alert {
+      background: #ffdddd;
+      color: #b10000;
+      border: 1px solid #b10000;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(250px,1fr));
+      gap: 1.5rem;
+    }
+    .card {
+      background: #f0f6ff;
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      box-shadow: 0 1px 5px rgb(74 144 226 / 0.3);
+      text-align: center;
+    }
+    .card h3 {
+      margin: 0.5rem 0;
+      color: #4a90e2;
+    }
+    .small-text {
+      font-size: 0.9rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Financial Tool</h1>
+  </header>
+  <main>
+    <section>
+      <h2>Add Expense</h2>
+      <form id="expenseForm">
+        <input type="text" id="expenseDesc" placeholder="Description (e.g. groceries)" required />
+        <input type="number" id="expenseAmount" placeholder="Amount ($)" step="0.01" min="0.01" required />
+        <input type="date" id="expenseDate" required />
+        <button type="submit">Add</button>
+      </form>
+      <div id="budgetAlert" class="alert" style="display:none;"></div>
+    </section>
+
+    <section>
+      <h2>Expenses</h2>
+      <table id="expenseTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Amount ($)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Set Financial Goal</h2>
+      <form id="goalForm">
+        <input type="text" id="goalDesc" placeholder="Goal (e.g. Save for vacation)" required />
+        <input type="number" id="goalAmount" placeholder="Target Amount ($)" step="0.01" min="0.01" required />
+        <button type="submit">Set Goal</button>
+      </form>
+      <div id="goalList"></div>
+    </section>
+
+    <section>
+      <h2>Dashboard</h2>
+      <div class="dashboard">
+        <div class="card">
+          <h3 id="totalSpent">$0.00</h3>
+          <p class="small-text">Total Spent (This Month)</p>
+        </div>
+        <div class="card">
+          <h3 id="predictedSpend">$0.00</h3>
+          <p class="small-text">Predicted Spend (Next Month)</p>
+        </div>
+        <div class="card">
+          <h3 id="budgetRemaining">$0.00</h3>
+          <p class="small-text">Budget Remaining</p>
+        </div>
+        <div class="card">
+          <h3 id="goalProgress">No goals set</h3>
+          <p class="small-text">Goal Progress</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const expenseForm = document.getElementById('expenseForm');
+      const expenseTableBody = document.querySelector('#expenseTable tbody');
+      const budgetAlert = document.getElementById('budgetAlert');
+      const totalSpentEl = document.getElementById('totalSpent');
+      const predictedSpendEl = document.getElementById('predictedSpend');
+      const budgetRemainingEl = document.getElementById('budgetRemaining');
+      const goalForm = document.getElementById('goalForm');
+      const goalListEl = document.getElementById('goalList');
+      const goalProgressEl = document.querySelector('.dashboard .card:nth-child(4) h3');
+
+      // Budget setting (for demo fixed)
+      const monthlyBudget = 2000;
+
+      // Store expenses and goals in-memory (for demo)
+      let expenses = [];
+      let goals = [];
+
+      // Basic AI-like categorization based on keywords
+      function categorizeExpense(desc) {
+        const descLower = desc.toLowerCase();
+        if (descLower.match(/grocery|supermarket|food|market|restaurant|dining/)) return 'Food';
+        if (descLower.match(/rent|mortgage|lease/)) return 'Housing';
+        if (descLower.match(/uber|taxi|bus|train|transport|gas|fuel|car/)) return 'Transport';
+        if (descLower.match(/phone|internet|wifi|subscription|netflix|spotify/)) return 'Utilities';
+        if (descLower.match(/clothes|shopping|apparel|shoes/)) return 'Shopping';
+        if (descLower.match(/health|doctor|medicine|pharmacy|insurance/)) return 'Health';
+        if (descLower.match(/entertainment|movie|game|concert/)) return 'Entertainment';
+        if (descLower.match(/education|course|book|school|college/)) return 'Education';
+        return 'Other';
+      }
+
+      // Add expense and update UI
+      function addExpense(desc, amount, date) {
+        const category = categorizeExpense(desc);
+        expenses.push({ desc, amount: parseFloat(amount), date: new Date(date), category });
+        renderExpenses();
+        updateDashboard();
+        checkBudgetAlert();
+        updateGoalProgress();
+      }
+
+      // Render expenses in table
+      function renderExpenses() {
+        expenseTableBody.innerHTML = '';
+        expenses
+          .sort((a,b) => b.date - a.date)
+          .forEach(({date, desc, category, amount}) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${date.toISOString().split('T')[0]}</td>
+              <td>${desc}</td>
+              <td class="category">${category}</td>
+              <td>${amount.toFixed(2)}</td>
+            `;
+            expenseTableBody.appendChild(tr);
+          });
+      }
+
+      // Get expenses for current month
+      function getCurrentMonthExpenses() {
+        const now = new Date();
+        return expenses.filter(e =>
+          e.date.getFullYear() === now.getFullYear() &&
+          e.date.getMonth() === now.getMonth()
+        );
+      }
+
+      // Predict next month spending by average monthly spending from past months
+      function predictNextMonthSpend() {
+        if (expenses.length === 0) return 0;
+
+        // Group expenses by month-year
+        const grouped = {};
+        expenses.forEach(e => {
+          const key = `${e.date.getFullYear()}-${e.date.getMonth()}`;
+          if (!grouped[key]) grouped[key] = 0;
+          grouped[key] += e.amount;
+        });
+
+        const months = Object.keys(grouped);
+        const total = months.reduce((acc, m) => acc + grouped[m], 0);
+        const avg = total / months.length;
+
+        return avg;
+      }
+
+      // Update dashboard stats
+      function updateDashboard() {
+        const currentMonthExpenses = getCurrentMonthExpenses();
+        const totalSpent = currentMonthExpenses.reduce((acc, e) => acc + e.amount, 0);
+        totalSpentEl.textContent = `$${totalSpent.toFixed(2)}`;
+
+        const predicted = predictNextMonthSpend();
+        predictedSpendEl.textContent = `$${predicted.toFixed(2)}`;
+
+        const remaining = monthlyBudget - totalSpent;
+        budgetRemainingEl.textContent = remaining >= 0 ? `$${remaining.toFixed(2)}` : `$0.00`;
+      }
+
+      // Check budget alert
+      function checkBudgetAlert() {
+        const currentMonthExpenses = getCurrentMonthExpenses();
+        const totalSpent = currentMonthExpenses.reduce((acc, e) => acc + e.amount, 0);
+
+        if (totalSpent > monthlyBudget) {
+          budgetAlert.style.display = 'block';
+          budgetAlert.textContent = `⚠️ You have exceeded your monthly budget of $${monthlyBudget.toFixed(2)}!`;
+        } else if (totalSpent > monthlyBudget * 0.9) {
+          budgetAlert.style.display = 'block';
+          budgetAlert.textContent = `⚠️ You are close to reaching your budget limit. Spent $${totalSpent.toFixed(2)} out of $${monthlyBudget.toFixed(2)}.`;
+        } else {
+          budgetAlert.style.display = 'none';
+        }
+      }
+
+      // Add goal
+      function addGoal(desc, amount) {
+        goals.push({ desc, amount: parseFloat(amount), saved: 0 });
+        renderGoals();
+        updateGoalProgress();
+      }
+
+      // Render goals
+      function renderGoals() {
+        if (goals.length === 0) {
+          goalListEl.innerHTML = '<p>No goals set yet.</p>';
+          return;
+        }
+
+        goalListEl.innerHTML = goals.map(g => {
+          const savedPercent = ((g.saved / g.amount) * 100).toFixed(1);
+          return `
+            <div style="margin-bottom:0.5rem;">
+              <strong>${g.desc}</strong> - Target: $${g.amount.toFixed(2)} - Saved: $${g.saved.toFixed(2)} (${savedPercent}%)
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Update goal progress (simulate saved amount by subtracting expenses)
+      // For demo, treat expenses as negative savings toward goals (just example)
+      function updateGoalProgress() {
+        if (goals.length === 0) {
+          goalProgressEl.textContent = 'No goals set';
+          return;
+        }
+
+        // For demo, calculate total expenses as negative savings (you could link real savings)
+        const totalSpent = expenses.reduce((acc, e) => acc + e.amount, 0);
+
+        goals.forEach(g => {
+          // For demo, assume user saves $500 per month minus expenses
+          const saved = Math.max(0, 500 - totalSpent);
+          g.saved = Math.min(saved, g.amount);
+        });
+
+        renderGoals();
+
+        // Show progress summary
+        const progressPercents = goals.map(g => (g.saved / g.amount) * 100);
+        const avgProgress = progressPercents.reduce((a,b) => a+b, 0) / progressPercents.length;
+        goalProgressEl.textContent = `${avgProgress.toFixed(1)}% average progress`;
+
+        // If close to or exceeded, alert user
+        goals.forEach(g => {
+          if (g.saved >= g.amount) {
+            alert(`🎉 Goal achieved: ${g.desc}!`);
+          } else if (g.saved / g.amount > 0.9) {
+            alert(`Almost there! You're 90% towards your goal: ${g.desc}`);
+          }
+        });
+      }
+
+      // Handle expense form submit
+      expenseForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const desc = document.getElementById('expenseDesc').value.trim();
+        const amount = document.getElementById('expenseAmount').value.trim();
+        const date = document.getElementById('expenseDate').value;
+
+        if (!desc || !amount || !date) return;
+
+        addExpense(desc, amount, date);
+
+        expenseForm.reset();
+      });
+
+      // Handle goal form submit
+      goalForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const desc = document.getElementById('goalDesc').value.trim();
+        const amount = document.getElementById('goalAmount').value.trim();
+
+        if (!desc || !amount) return;
+
+        addGoal(desc, amount);
+
+        goalForm.reset();
+      });
+
+      // Initialize date inputs to today
+      document.getElementById('expenseDate').valueAsDate = new Date();
+
+      // Initial dashboard update
+      updateDashboard();
+      renderGoals();
+    })();
+  </script>
+</body>
+</html>
